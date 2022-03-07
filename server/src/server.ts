@@ -89,7 +89,7 @@ documents.onDidChangeContent((event: LS.TextDocumentChangeEvent<TextDocument>) =
 });
 
 async function validateDocument(document: TextDocument): Promise<void> {
-    const result: PQLS.ValidationResult = PQLS.validate(
+    const result: PQLS.ValidationResult = await PQLS.validate(
         document,
         createValidationSettings(getLocalizedStandardLibrary()),
     );
@@ -101,31 +101,33 @@ async function validateDocument(document: TextDocument): Promise<void> {
     });
 }
 
-connection.onDocumentFormatting((documentfomattingParams: LS.DocumentFormattingParams): LS.TextEdit[] => {
-    const maybeDocument: TextDocument | undefined = documents.get(documentfomattingParams.textDocument.uri);
-    if (maybeDocument === undefined) {
-        return [];
-    }
-    const document: TextDocument = maybeDocument;
-
-    try {
-        return PQLS.tryFormat(document, documentfomattingParams.options, serverSettings.locale);
-    } catch (err) {
-        const error: Error = err as Error;
-        const errorMessage: string = error.message;
-
-        let userMessage: string;
-        // An already localized message was returned.
-        if (errorMessage) {
-            userMessage = errorMessage;
-        } else {
-            userMessage = "An unknown error occured during formatting.";
+connection.onDocumentFormatting(
+    async (documentfomattingParams: LS.DocumentFormattingParams): Promise<LS.TextEdit[]> => {
+        const maybeDocument: TextDocument | undefined = documents.get(documentfomattingParams.textDocument.uri);
+        if (maybeDocument === undefined) {
+            return [];
         }
+        const document: TextDocument = maybeDocument;
 
-        connection.window.showErrorMessage(userMessage);
-        return [];
-    }
-});
+        try {
+            return await PQLS.tryFormat(document, documentfomattingParams.options, serverSettings.locale);
+        } catch (err) {
+            const error: Error = err as Error;
+            const errorMessage: string = error.message;
+
+            let userMessage: string;
+            // An already localized message was returned.
+            if (errorMessage) {
+                userMessage = errorMessage;
+            } else {
+                userMessage = "An unknown error occured during formatting.";
+            }
+
+            connection.window.showErrorMessage(userMessage);
+            return [];
+        }
+    },
+);
 
 connection.onCompletion(
     async (
@@ -238,6 +240,7 @@ function createInspectionSettings(library: PQLS.Library.ILibrary): PQLS.Inspecti
             ...PQP.DefaultSettings,
             locale: serverSettings.locale,
         },
+        undefined,
         library.externalTypeResolver,
     );
 }
